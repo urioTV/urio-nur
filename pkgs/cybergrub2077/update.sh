@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Get latest commit from master branch
-LATEST=$(curl -s https://api.github.com/repos/adnksharp/CyberGRUB-2077/commits/master | grep '"sha"' | head -1 | sed 's/.*"\([a-f0-9]\{40\}\)".*/\1/')
+# Get latest commit from base branch (default branch)
+LATEST=$(curl -s https://api.github.com/repos/adnksharp/CyberGRUB-2077/commits/base | grep '"sha"' | head -1 | sed 's/.*"\([a-f0-9]\{40\}\)".*/\1/')
 CURRENT=$(grep "rev = " pkgs/cybergrub2077/default.nix | sed 's/.*"\(.*\)".*/\1/')
+
+if [ -z "$LATEST" ]; then
+    echo "Error: Could not fetch latest commit"
+    exit 1
+fi
 
 if [ "$LATEST" = "$CURRENT" ]; then
     echo "cybergrub2077 is up to date ($CURRENT)"

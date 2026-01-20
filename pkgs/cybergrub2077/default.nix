@@ -7,12 +7,12 @@
 
 stdenv.mkDerivation {
   pname = "cyber-grub-2077";
-  version = "master";
+  version = "unstable-2024-01-20";
 
   src = fetchFromGitHub {
     owner = "adnksharp";
     repo = "CyberGRUB-2077";
-    rev = "master";
+    rev = "6a5736ef44e4ede9bb403d78eafe7271dd2928db";
     sha256 = "sha256-RyKs2tJBp/A4eqjvsPDBLttSL5Bw6U+fanwLZeC0wbg=";
   };
 
