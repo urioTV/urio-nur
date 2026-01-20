@@ -35,19 +35,53 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Initialize summary
+          echo "## Package Update Status" >> $GITHUB_STEP_SUMMARY
+          echo "| Package | Status | Message |" >> $GITHUB_STEP_SUMMARY
+          echo "| --- | --- | --- |" >> $GITHUB_STEP_SUMMARY
+
+          FAILED=0
+          
+          run_update() {
+            local script=$1
+            local pkg_name=$(basename $(dirname $script))
+            
+            echo "::group::Updating $pkg_name"
+            
+            if output=$(./$script 2>&1); then
+              echo "✅ Success"
+              echo "| $pkg_name | ✅ Success | $output |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "❌ Failed"
+              echo "| $pkg_name | ❌ Failed | <pre>$output</pre> |" >> $GITHUB_STEP_SUMMARY
+              FAILED=1
+            fi
+            
+            echo "$output"
+            echo "::endgroup::"
+          }
+
           # If specific package requested, update only that
           if [ -n "${{ github.event.inputs.package }}" ]; then
-            ./pkgs/${{ github.event.inputs.package }}/update.sh
+            run_update "pkgs/${{ github.event.inputs.package }}/update.sh"
           else
             # Update all packages
             for script in pkgs/*/update.sh; do
-              echo "Running $script..."
-              ./$script || echo "Update script failed or no update needed"
+              run_update "$script"
             done
+          fi
+          
+          if [ $FAILED -ne 0 ]; then
+            echo "::error::Some packages failed to update"
+            exit 1
           fi
 
       - name: Check for changes
         id: changes
+        if: always() # Run even if updates failed (to save partial updates if desired, or skip)
+                     # Actually, if we exit 1 above, this might skip. User wants to know if it failed.
+                     # If we exit 1, the job is marked failed. Use 'if: success() || failure()' if we still want to commit partials? 
+                     # Let's keep strict failure for now as requested "wiem czy się udał czy nie".
         run: |
           if git diff --quiet; then
             echo "has_changes=false" >> $GITHUB_OUTPUT
@@ -56,7 +90,7 @@ jobs:
           fi
 
       - name: Create Pull Request
-        if: steps.changes.outputs.has_changes == 'true'
+        if: steps.changes.outputs.has_changes == 'true' && success()
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -65,6 +99,8 @@ jobs:
           body: |
             This PR was automatically created by the update workflow.
             
-            Please review the changes and merge if everything looks correct.
+            See the [Build Log](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.
+            
+            ${{ github.step_summary }}
           branch: auto-update-packages
           delete-branch: true
