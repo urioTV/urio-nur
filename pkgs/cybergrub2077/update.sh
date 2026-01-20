@@ -19,9 +19,11 @@ echo "Updating cybergrub2077: ${CURRENT:0:7} -> ${LATEST:0:7}"
 
 # Get new hash using nix flake prefetch
 HASH=$(nix flake prefetch "github:adnksharp/CyberGRUB-2077/$LATEST" --json 2>/dev/null | grep -o '"hash":"[^"]*"' | sed 's/"hash":"//;s/"//')
+DATE=$(date +%Y-%m-%d)
 
-# Update rev and hash in file
+# Update rev, hash, and version in file
 sed -i "s/rev = \"${CURRENT}\"/rev = \"${LATEST}\"/" pkgs/cybergrub2077/default.nix
 sed -i "s|sha256 = \"sha256-.*\"|sha256 = \"${HASH}\"|" pkgs/cybergrub2077/default.nix
+sed -i "s/version = \"unstable-.*\"/version = \"unstable-${DATE}\"/" pkgs/cybergrub2077/default.nix
 
-echo "Updated cybergrub2077 to ${LATEST:0:7}"
+echo "Updated cybergrub2077 to ${LATEST:0:7} (${DATE})"
