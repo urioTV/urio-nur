@@ -1,10 +1,8 @@
-#!/usr/bin/env nix-shell
-#!nix-shell -i bash -p curl jq nix-prefetch-github
-
+#!/usr/bin/env bash
 set -euo pipefail
 
 # Get latest commit from master branch
-LATEST=$(curl -s https://api.github.com/repos/adnksharp/CyberGRUB-2077/commits/master | jq -r '.sha')
+LATEST=$(curl -s https://api.github.com/repos/adnksharp/CyberGRUB-2077/commits/master | grep '"sha"' | head -1 | sed 's/.*"\([a-f0-9]\{40\}\)".*/\1/')
 CURRENT=$(grep "rev = " pkgs/cybergrub2077/default.nix | sed 's/.*"\(.*\)".*/\1/')
 
 if [ "$LATEST" = "$CURRENT" ]; then
@@ -14,8 +12,8 @@ fi
 
 echo "Updating cybergrub2077: ${CURRENT:0:7} -> ${LATEST:0:7}"
 
-# Get new hash
-HASH=$(nix-prefetch-github adnksharp CyberGRUB-2077 --rev "$LATEST" 2>/dev/null | jq -r '.hash')
+# Get new hash using nix flake prefetch
+HASH=$(nix flake prefetch "github:adnksharp/CyberGRUB-2077/$LATEST" --json 2>/dev/null | grep -o '"hash":"[^"]*"' | sed 's/"hash":"//;s/"//')
 
 # Update rev and hash in file
 sed -i "s/rev = \"${CURRENT}\"/rev = \"${LATEST}\"/" pkgs/cybergrub2077/default.nix

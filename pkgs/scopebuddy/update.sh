@@ -1,10 +1,8 @@
-#!/usr/bin/env nix-shell
-#!nix-shell -i bash -p curl jq nix-prefetch-github
-
+#!/usr/bin/env bash
 set -euo pipefail
 
 # Get latest commit from main branch
-LATEST=$(curl -s https://api.github.com/repos/HikariKnight/ScopeBuddy/commits/main | jq -r '.sha')
+LATEST=$(curl -s https://api.github.com/repos/HikariKnight/ScopeBuddy/commits/main | grep '"sha"' | head -1 | sed 's/.*"\([a-f0-9]\{40\}\)".*/\1/')
 CURRENT=$(grep "rev = " pkgs/scopebuddy/default.nix | sed 's/.*"\(.*\)".*/\1/')
 
 if [ "$LATEST" = "$CURRENT" ]; then
@@ -14,8 +12,8 @@ fi
 
 echo "Updating scopebuddy: ${CURRENT:0:7} -> ${LATEST:0:7}"
 
-# Get new hash
-HASH=$(nix-prefetch-github HikariKnight ScopeBuddy --rev "$LATEST" 2>/dev/null | jq -r '.hash')
+# Get new hash using nix flake prefetch
+HASH=$(nix flake prefetch "github:HikariKnight/ScopeBuddy/$LATEST" --json 2>/dev/null | grep -o '"hash":"[^"]*"' | sed 's/"hash":"//;s/"//')
 DATE=$(date +%Y-%m-%d)
 
 # Update rev, hash, and version in file
