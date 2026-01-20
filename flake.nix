@@ -23,7 +23,7 @@
 
       # NixOS modules
       nixosModules = {
-        vintagestory = import ./modules/vintagestory.nix;
+        vintagestory = import ./modules/vintagestory.nix ./pkgs/vintagestory;
 
         # Default imports all modules
         default =
