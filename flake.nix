@@ -20,5 +20,19 @@
         system: nixpkgs.lib.filterAttrs (_: v: nixpkgs.lib.isDerivation v) self.legacyPackages.${system}
       );
       overlays = import ./overlays;
+
+      # NixOS modules
+      nixosModules = {
+        vintagestory = import ./modules/vintagestory.nix;
+
+        # Default imports all modules
+        default =
+          { ... }:
+          {
+            imports = [
+              self.nixosModules.vintagestory
+            ];
+          };
+      };
     };
 }
