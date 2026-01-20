@@ -1,5 +1,4 @@
 {
-  # Add your NixOS modules here
-  #
-  # my-module = ./my-module;
+  # NixOS modules
+  vintagestory = ./vintagestory.nix;
 }

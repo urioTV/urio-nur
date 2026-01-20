@@ -17,22 +17,34 @@
   pipewire,
   libpulseaudio,
   dotnet-runtime_8,
+  # REQUIRED: Version and hash must be provided
+  version,
+  hash,
 }:
 
-stdenv.mkDerivation rec {
-  pname = "vintagestory";
-  version = "1.21.0";
+assert lib.assertMsg (version != null) ''
+  vintagestory: version is required.
 
-  src = fetchurl {
-    url = "https://cdn.vintagestory.at/gamefiles/stable/vs_client_linux-x64_${version}.tar.gz";
-    hash = "sha256-90YQOur7UhXxDBkGLSMnXQK7iQ6+Z8Mqx9PEG6FEXBs=";
-  };
+  Usage:
+    vintagestory.override {
+      version = "1.21.0";
+      hash = "sha256-...";
+    }
 
-  nativeBuildInputs = [
-    makeWrapper
-    copyDesktopItems
-  ];
+  To get the hash for a version:
+    nix-prefetch-url https://cdn.vintagestory.at/gamefiles/stable/vs_client_linux-x64_<VERSION>.tar.gz
+    nix hash convert --hash-algo sha256 --to sri <HASH>
+'';
 
+assert lib.assertMsg (hash != null) ''
+  vintagestory: hash is required.
+
+  To get the hash for version ${version}:
+    nix-prefetch-url https://cdn.vintagestory.at/gamefiles/stable/vs_client_linux-x64_${version}.tar.gz
+    nix hash convert --hash-algo sha256 --to sri <HASH>
+'';
+
+let
   runtimeLibs = lib.makeLibraryPath (
     [
       gtk2
@@ -52,6 +64,21 @@ stdenv.mkDerivation rec {
       libXcursor
     ])
   );
+
+in
+stdenv.mkDerivation {
+  pname = "vintagestory";
+  inherit version;
+
+  src = fetchurl {
+    url = "https://cdn.vintagestory.at/gamefiles/stable/vs_client_linux-x64_${version}.tar.gz";
+    inherit hash;
+  };
+
+  nativeBuildInputs = [
+    makeWrapper
+    copyDesktopItems
+  ];
 
   desktopItems = [
     (makeDesktopItem {
@@ -94,6 +121,17 @@ stdenv.mkDerivation rec {
 
   meta = {
     description = "In-development indie sandbox game about innovation and exploration";
+    longDescription = ''
+      Vintage Story is a sandbox survival game set in a harsh medieval world.
+
+      This package requires explicit version and hash:
+        vintagestory.override {
+          version = "1.21.0";
+          hash = "sha256-90YQOur7UhXxDBkGLSMnXQK7iQ6+Z8Mqx9PEG6FEXBs=";
+        }
+
+      Check https://www.vintagestory.at/download/ for available versions.
+    '';
     homepage = "https://www.vintagestory.at/";
     license = lib.licenses.unfree;
     sourceProvenance = [ lib.sourceTypes.binaryBytecode ];

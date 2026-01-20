@@ -1,0 +1,70 @@
+name: "Update packages"
+on:
+  schedule:
+    # Run every Sunday at 3:00 AM
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'Package to update (leave empty for all)'
+        required: false
+        default: ''
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup cachix
+        uses: cachix/cachix-action@v16
+        with:
+          name: uriotv
+          signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+
+      - name: Update packages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # If specific package requested, update only that
+          if [ -n "${{ github.event.inputs.package }}" ]; then
+            ./pkgs/${{ github.event.inputs.package }}/update.sh
+          else
+            # Update all packages
+            for script in pkgs/*/update.sh; do
+              echo "Running $script..."
+              ./$script || echo "Update script failed or no update needed"
+            done
+          fi
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Pull Request
+        if: steps.changes.outputs.has_changes == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: auto-update packages"
+          title: "chore: Auto-update packages"
+          body: |
+            This PR was automatically created by the update workflow.
+            
+            Please review the changes and merge if everything looks correct.
+          branch: auto-update-packages
+          delete-branch: true
