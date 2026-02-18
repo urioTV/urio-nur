@@ -1,6 +1,6 @@
 # Crush Home Manager module with MCP integration.
 # Re-exports the official charmbracelet/nur crush module and adds
-# enableMcpIntegration option (similar to opencode's pattern).
+# enableMcpIntegration option and providerApiKeyFiles.
 { charm-nur }:
 
 { config, lib, ... }:
@@ -42,29 +42,59 @@ let
       )
     else
       { };
+
+  # Read API keys from files and generate provider settings
+  providerApiKeys = lib.mapAttrs (name: path: {
+    api_key = builtins.readFile path;
+  }) cfg.providerApiKeyFiles;
 in
 {
   # Re-export the official Charm NUR crush module
   imports = [ charm-nur.homeModules.crush ];
 
-  options.programs.crush.enableMcpIntegration = lib.mkOption {
-    type = lib.types.bool;
-    default = false;
-    description = ''
-      Whether to integrate the MCP servers config from
-      {option}`programs.mcp.servers` into
-      {option}`programs.crush.settings.mcp`.
+  options.programs.crush = {
+    enableMcpIntegration = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        Whether to integrate the MCP servers config from
+        {option}`programs.mcp.servers` into
+        {option}`programs.crush.settings.mcp`.
 
-      Note: Settings defined in {option}`programs.mcp.servers` are merged
-      with {option}`programs.crush.settings.mcp`, with Crush-specific
-      settings taking precedence.
-    '';
+        Note: Settings defined in {option}`programs.mcp.servers` are merged
+        with {option}`programs.crush.settings.mcp`, with Crush-specific
+        settings taking precedence.
+      '';
+    };
+
+    providerApiKeyFiles = lib.mkOption {
+      type = lib.types.attrsOf lib.types.path;
+      default = { };
+      example = lib.literalExpression ''
+        {
+          openrouter = config.sops.secrets.openrouter_api_key.path;
+          anthropic = "/run/secrets/anthropic_key";
+        }
+      '';
+      description = ''
+        Attribute set mapping provider names to file paths containing
+        API keys. The files are read at build time and injected into
+        {option}`programs.crush.settings.providers.<name>.api_key`.
+      '';
+    };
   };
 
-  # Use mkIf to only set MCP when there are transformed servers.
-  # Do NOT read cfg.settings.mcp here — that causes infinite recursion.
-  # The Nix module system merges multiple definitions of attrsOf automatically.
-  config = lib.mkIf (cfg.enable && transformedMcpServers != { }) {
-    programs.crush.settings.mcp = transformedMcpServers;
-  };
+  config = lib.mkIf cfg.enable (
+    lib.mkMerge [
+      # Inject MCP servers from programs.mcp
+      (lib.mkIf (transformedMcpServers != { }) {
+        programs.crush.settings.mcp = transformedMcpServers;
+      })
+
+      # Inject API keys from files into provider settings
+      (lib.mkIf (cfg.providerApiKeyFiles != { }) {
+        programs.crush.settings.providers = providerApiKeys;
+      })
+    ]
+  );
 }
