@@ -48,26 +48,20 @@ let
     else
       { };
 
-  # Generate placeholder strings for API keys (replaced at activation time)
-  apiKeyPlaceholder = name: "__CRUSH_APIKEY_${name}__";
+  crushConfigPath = "${config.xdg.configHome}/crush/crush.json";
 
-  providerPlaceholders = lib.mapAttrs (name: _path: {
-    api_key = apiKeyPlaceholder name;
-  }) cfg.providerApiKeyFiles;
-
-  # Build sed replacement commands for activation script
-  sedCommands = lib.concatStringsSep "\n" (
+  # Build jq commands to inject API keys into the JSON at runtime
+  jqCommands = lib.concatStringsSep "\n" (
     lib.mapAttrsToList (name: path: ''
       if [ -f "${path}" ]; then
         __apikey=$(cat "${path}" | tr -d '\n')
-        ${pkgs.gnused}/bin/sed -i "s|${apiKeyPlaceholder name}|$__apikey|g" "$__crushConfig"
+        __crushJson=$(${pkgs.jq}/bin/jq --arg key "$__apikey" '.providers.${name}.api_key = $key' "$__crushConfig")
+        echo "$__crushJson" > "$__crushConfig"
       else
-        echo "Warning: Crush API key file not found: ${path}" >&2
+        echo "Warning: Crush API key file not found for provider '${name}': ${path}" >&2
       fi
     '') cfg.providerApiKeyFiles
   );
-
-  crushConfigPath = "${config.xdg.configHome}/crush/crush.json";
 in
 {
   # Re-export the official Charm NUR crush module
@@ -99,10 +93,10 @@ in
       '';
       description = ''
         Attribute set mapping provider names to file paths containing
-        API keys. The secrets are injected at activation time (runtime),
-        making this compatible with sops-nix and agenix.
+        API keys. The secrets are injected at activation time (runtime)
+        using jq, making this compatible with sops-nix and agenix.
         The key is read from the file and placed into
-        {option}`programs.crush.settings.providers.<name>.api_key`.
+        the provider's api_key field in crush.json.
       '';
     };
   };
@@ -114,17 +108,12 @@ in
         programs.crush.settings.mcp = transformedMcpServers;
       })
 
-      # Set placeholders in provider settings + activation script for runtime substitution
+      # Activation script to inject API keys from files into crush.json at runtime
       (lib.mkIf (cfg.providerApiKeyFiles != { }) {
-        programs.crush.settings.providers = providerPlaceholders;
-
-        # Make crush.json mutable so activation can patch it
-        home.file.".config/crush/crush.json".force = true;
-
         home.activation.crushApiKeys = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
           __crushConfig="${crushConfigPath}"
           if [ -f "$__crushConfig" ]; then
-            ${sedCommands}
+            ${jqCommands}
           fi
         '';
       })
