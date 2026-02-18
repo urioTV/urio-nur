@@ -51,7 +51,10 @@ in
     '';
   };
 
+  # Use mkIf to only set MCP when there are transformed servers.
+  # Do NOT read cfg.settings.mcp here — that causes infinite recursion.
+  # The Nix module system merges multiple definitions of attrsOf automatically.
   config = lib.mkIf (cfg.enable && transformedMcpServers != { }) {
-    programs.crush.settings.mcp = transformedMcpServers // (cfg.settings.mcp or { });
+    programs.crush.settings.mcp = transformedMcpServers;
   };
 }
