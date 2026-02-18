@@ -7,15 +7,25 @@
 let
   cfg = config.programs.crush;
 
+  # Map generic MCP type names to Crush-compatible types
+  mapType =
+    t:
+    {
+      "remote" = "http";
+      "local" = "stdio";
+    }
+    .${t} or t;
+
   # Transform a programs.mcp server entry into Crush's MCP format
   transformMcpServer =
     name: server:
     let
       detectedType = if server ? url then "http" else "stdio";
+      rawType = server.type or detectedType;
     in
     lib.filterAttrs (_: v: v != null) (
       {
-        type = server.type or detectedType;
+        type = mapType rawType;
       }
       // (lib.optionalAttrs (server ? command) { inherit (server) command; })
       // (lib.optionalAttrs (server ? args) { inherit (server) args; })
