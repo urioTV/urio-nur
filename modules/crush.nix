@@ -1,14 +1,9 @@
 # Crush Home Manager module with MCP integration.
 # Re-exports the official charmbracelet/nur crush module and adds
-# enableMcpIntegration option and providerApiKeyFiles.
+# enableMcpIntegration option (similar to opencode's pattern).
 { charm-nur }:
 
-{
-  config,
-  lib,
-  pkgs,
-  ...
-}:
+{ config, lib, ... }:
 let
   cfg = config.programs.crush;
 
@@ -47,76 +42,26 @@ let
       )
     else
       { };
-
-  crushConfigPath = "${config.xdg.configHome}/crush/crush.json";
-
-  # Build jq commands to inject API keys into the JSON at runtime
-  jqCommands = lib.concatStringsSep "\n" (
-    lib.mapAttrsToList (name: path: ''
-      if [ -f "${path}" ]; then
-        __apikey=$(cat "${path}" | tr -d '\n')
-        __crushJson=$(${pkgs.jq}/bin/jq --arg key "$__apikey" '.providers.${name}.api_key = $key' "$__crushConfig")
-        echo "$__crushJson" > "$__crushConfig"
-      else
-        echo "Warning: Crush API key file not found for provider '${name}': ${path}" >&2
-      fi
-    '') cfg.providerApiKeyFiles
-  );
 in
 {
   # Re-export the official Charm NUR crush module
   imports = [ charm-nur.homeModules.crush ];
 
-  options.programs.crush = {
-    enableMcpIntegration = lib.mkOption {
-      type = lib.types.bool;
-      default = false;
-      description = ''
-        Whether to integrate the MCP servers config from
-        {option}`programs.mcp.servers` into
-        {option}`programs.crush.settings.mcp`.
+  options.programs.crush.enableMcpIntegration = lib.mkOption {
+    type = lib.types.bool;
+    default = false;
+    description = ''
+      Whether to integrate the MCP servers config from
+      {option}`programs.mcp.servers` into
+      {option}`programs.crush.settings.mcp`.
 
-        Note: Settings defined in {option}`programs.mcp.servers` are merged
-        with {option}`programs.crush.settings.mcp`, with Crush-specific
-        settings taking precedence.
-      '';
-    };
-
-    providerApiKeyFiles = lib.mkOption {
-      type = lib.types.attrsOf lib.types.str;
-      default = { };
-      example = lib.literalExpression ''
-        {
-          openrouter = config.sops.secrets.openrouter_api_key.path;
-          anthropic = "/run/secrets/anthropic_key";
-        }
-      '';
-      description = ''
-        Attribute set mapping provider names to file paths containing
-        API keys. The secrets are injected at activation time (runtime)
-        using jq, making this compatible with sops-nix and agenix.
-        The key is read from the file and placed into
-        the provider's api_key field in crush.json.
-      '';
-    };
+      Note: Settings defined in {option}`programs.mcp.servers` are merged
+      with {option}`programs.crush.settings.mcp`, with Crush-specific
+      settings taking precedence.
+    '';
   };
 
-  config = lib.mkIf cfg.enable (
-    lib.mkMerge [
-      # Inject MCP servers from programs.mcp
-      (lib.mkIf (transformedMcpServers != { }) {
-        programs.crush.settings.mcp = transformedMcpServers;
-      })
-
-      # Activation script to inject API keys from files into crush.json at runtime
-      (lib.mkIf (cfg.providerApiKeyFiles != { }) {
-        home.activation.crushApiKeys = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-          __crushConfig="${crushConfigPath}"
-          if [ -f "$__crushConfig" ]; then
-            ${jqCommands}
-          fi
-        '';
-      })
-    ]
-  );
+  config = lib.mkIf (cfg.enable && transformedMcpServers != { }) {
+    programs.crush.settings.mcp = transformedMcpServers;
+  };
 }
