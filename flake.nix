@@ -36,7 +36,6 @@
       flake = {
         overlays = import ./overlays;
         homeModules = {
-          crush = import ./modules/crush.nix { inherit (inputs) charm-nur; };
         };
         nixosModules = {
           default =
