@@ -7,5 +7,6 @@
     wowup-cf = final.callPackage ../pkgs/wowup-cf { };
     scopebuddy = final.callPackage ../pkgs/scopebuddy { };
     vs-launcher = final.callPackage ../pkgs/vs-launcher { };
+    shadowcrawl = final.callPackage ../pkgs/shadowcrawl { };
   };
 }
