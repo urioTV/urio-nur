@@ -26,7 +26,6 @@
 
   # Tools
   scopebuddy = pkgs.callPackage ./pkgs/scopebuddy { };
-  shadowcrawl = pkgs.callPackage ./pkgs/shadowcrawl { };
   # Launcher
   vs-launcher = pkgs.callPackage ./pkgs/vs-launcher { };
 }
