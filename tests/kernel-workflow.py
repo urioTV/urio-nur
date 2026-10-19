@@ -3,6 +3,7 @@
 
 import importlib.util
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -107,11 +108,56 @@ class KernelGateTests(unittest.TestCase):
     def test_publication_is_main_only_and_includes_every_output_and_sources(self):
         workflow = (ROOT / ".github/workflows/kernel.yml").read_text()
         self.assertIn("github.event_name != 'pull_request' && github.ref == 'refs/heads/main'", workflow)
-        self.assertIn("skipPush: true", workflow)
+        # Cachix is read-only in the shared setup action (asserted below).
+        self.assertIn("uses: ./.github/actions/setup-nix-nixbuild", workflow)
         self.assertIn("linux-cachyos-bore-x86_64-v3^*", workflow)
         self.assertIn("linux-cachyos-bore-x86_64-v3.src", workflow)
         self.assertIn("linux-cachyos-bore-x86_64-v3.urioUpstreamSource", workflow)
         self.assertIn("StorePath: $path", workflow)
+
+
+class NixbuildCiTests(unittest.TestCase):
+    SETUP = "uses: ./.github/actions/setup-nix-nixbuild"
+    BUILDS = ("nix build", "nix-build", "update-packages.sh")
+
+    def test_every_building_workflow_uses_nixbuild_without_local_fallback(self):
+        for path in sorted((ROOT / ".github/workflows").glob("*.yml")):
+            workflow = path.read_text()
+            with self.subTest(workflow=path.name):
+                if any(command in workflow for command in self.BUILDS):
+                    self.assertIn(self.SETUP, workflow)
+                    self.assertIn("nixbuild_token: ${{ secrets.NIXBUILD_TOKEN }}", workflow)
+                    # Nix must come only from the shared action (no second, local-build setup).
+                    self.assertNotIn("cachix/install-nix-action", workflow)
+                    self.assertNotIn("cachix/cachix-action", workflow)
+                    self.assertNotIn("cores = ", workflow)
+                else:
+                    self.assertNotIn("nixbuild", workflow.replace("nixbuild.net builder", ""))
+
+    def test_shared_action_requires_token_and_disables_local_builds(self):
+        action = (ROOT / ".github/actions/setup-nix-nixbuild/action.yml").read_text()
+        steps = ["Require nixbuild.net token", "cachix/install-nix-action@",
+                 "cachix/cachix-action@", "nixbuild/nixbuild-action@",
+                 "Verify that no build can run on the runner"]
+        positions = [action.index(step) for step in steps]
+        self.assertEqual(positions, sorted(positions))
+        self.assertIn("skipPush: true", action)
+        self.assertIn('[ "$max_jobs" = 0 ]', action)
+        self.assertNotIn("authToken", action)
+        check = action.split("      run: |\n", 1)[1].split("\n    - ", 1)[0]
+        check = "\n".join(line[8:] for line in check.splitlines())
+        for token, ok in (("", False), ("secret", True)):
+            with self.subTest(token=bool(token)):
+                result = subprocess.run(["bash", "-c", check], capture_output=True,
+                                        env={"NIXBUILD_TOKEN": token, "PATH": os.environ["PATH"]})
+                self.assertEqual(result.returncode == 0, ok)
+
+    def test_cachix_writes_are_explicit_and_main_only(self):
+        for name in ("build.yml", "kernel.yml"):
+            workflow = (ROOT / ".github/workflows" / name).read_text()
+            with self.subTest(workflow=name):
+                publish = workflow.split("cachix push", 1)[0].rsplit("- name:", 1)[1]
+                self.assertIn("github.event_name != 'pull_request' && github.ref == 'refs/heads/main'", publish)
 
 
 if __name__ == "__main__":
