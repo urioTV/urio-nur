@@ -4,6 +4,7 @@
 import importlib.util
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import tempfile
@@ -136,15 +137,19 @@ class NixbuildCiTests(unittest.TestCase):
 
     def test_shared_action_requires_token_and_disables_local_builds(self):
         action = (ROOT / ".github/actions/setup-nix-nixbuild/action.yml").read_text()
-        steps = ["Require nixbuild.net token", "cachix/install-nix-action@",
+        steps = ["Require nixbuild.net token", "nixbuild/nix-quick-install-action@",
                  "cachix/cachix-action@", "nixbuild/nixbuild-action@",
                  "Verify that no build can run on the runner"]
+        # A multi-user daemon cannot use nixbuild-action's SSH config.
+        self.assertNotIn("uses: cachix/install-nix-action", action)
+        self.assertIn("daemon-socket", action)
         positions = [action.index(step) for step in steps]
         self.assertEqual(positions, sorted(positions))
         self.assertIn("skipPush: true", action)
         self.assertIn('[ "$max_jobs" = 0 ]', action)
         self.assertNotIn("authToken", action)
-        check = action.split("      run: |\n", 1)[1].split("\n    - ", 1)[0]
+        # The script ends at the next step or comment (indented 4 spaces).
+        check = re.split(r"\n    \S", action.split("      run: |\n", 1)[1], maxsplit=1)[0]
         check = "\n".join(line[8:] for line in check.splitlines())
         for token, ok in (("", False), ("secret", True)):
             with self.subTest(token=bool(token)):

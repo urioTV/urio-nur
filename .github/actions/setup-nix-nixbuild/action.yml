@@ -34,13 +34,21 @@ runs:
           echo '::error::Missing NIXBUILD_TOKEN secret. All Nix builds run on nixbuild.net; add it under Settings → Secrets and variables → Actions (and Dependabot, for Dependabot PRs).'
           exit 1
         fi
-    - uses: cachix/install-nix-action@v31
+    # Single-user Nix on purpose: with a multi-user nix-daemon (e.g.
+    # cachix/install-nix-action), builds are dispatched by root, which does not
+    # see nixbuild-action's NIX_SSHOPTS, and fail with
+    # "failed to start SSH connection to 'nixbuild'".
+    - uses: nixbuild/nix-quick-install-action@v35
       with:
-        nix_path: ${{ inputs.nix_path }}
-        extra_nix_config: |
+        nix_conf: |
           experimental-features = nix-command flakes
-          sandbox = true
           ${{ inputs.extra_nix_config }}
+    - name: Set NIX_PATH
+      if: inputs.nix_path != ''
+      shell: bash
+      env:
+        INPUT_NIX_PATH: ${{ inputs.nix_path }}
+      run: echo "NIX_PATH=$INPUT_NIX_PATH" >> "$GITHUB_ENV"
     - uses: cachix/cachix-action@v17
       with:
         name: uriotv
@@ -62,3 +70,5 @@ runs:
         echo "max-jobs = $max_jobs; builders = $builders"
         [ "$max_jobs" = 0 ] || { echo '::error::Local Nix builds are still enabled'; exit 1; }
         [ -n "$builders" ] || { echo '::error::nixbuild.net builder is not configured'; exit 1; }
+        [ ! -S /nix/var/nix/daemon-socket/socket ] || {
+          echo '::error::A nix-daemon is running; it cannot reach nixbuild.net'; exit 1; }
