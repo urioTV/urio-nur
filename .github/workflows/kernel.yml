@@ -169,6 +169,21 @@ jobs:
             ".#packages.x86_64-linux.\"${KERNEL_ATTR}\"^*" > "$RUNNER_TEMP/kernel-outputs"
           cat "$RUNNER_TEMP/kernel-outputs"
 
+      - name: Prove realised outputs came from uriotv
+        # Nix copies signatures from the source it substituted from. A path built here
+        # has no uriotv signature, so this fails if the outputs were not fetched.
+        if: steps.realise.outcome == 'success'
+        run: |
+          set -euo pipefail
+          while IFS= read -r path; do
+            if nix path-info --sigs "$path" | grep -q 'uriotv.cachix.org-1:'; then
+              echo "from uriotv: $path"
+            else
+              echo "::error::not signed by uriotv (possibly built locally): $path"
+              exit 1
+            fi
+          done < "$RUNNER_TEMP/kernel-outputs"
+
       - name: Build kernel outputs from source
         id: build
         if: steps.published.outputs.skip != 'true'
