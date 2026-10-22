@@ -115,5 +115,22 @@ class AtticIndependenceTests(unittest.TestCase):
         self.assertIn("id: closure", body)
 
 
+    def test_kernel_pushes_never_depend_on_skip_or_each_other(self):
+        body = (ROOT / ".github/workflows/kernel.yml").read_text()
+        cachix = body.split("      - name: Publish to uriotv and verify StorePath", 1)[1].split("      - name:", 1)[0]
+        attic = body.split("      - name: Push kernel outputs to the private attic cache", 1)[1]
+        attic = attic.split("run:", 1)[0]
+        for label, step in ("cachix", cachix), ("attic", attic):
+            with self.subTest(step=label):
+                self.assertNotIn("published.outputs.skip", step)
+                self.assertIn("steps.closure.outcome == 'success'", step)
+        self.assertNotIn("steps.attic", cachix)
+        self.assertNotIn("steps.publish", attic)
+        self.assertIn("always()", cachix)
+        self.assertIn("always()", attic)
+        self.assertIn("--max-jobs 0", body)
+        self.assertIn("id: realise", body)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
