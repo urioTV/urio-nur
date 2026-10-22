@@ -50,6 +50,31 @@ class RegistryTests(unittest.TestCase):
                 self.assertNotEqual(self.names(check=False).returncode, 0)
                 shutil.rmtree(self.root / name)
 
+    def test_kernel_package_sets_wrap_kernels_without_becoming_ci_roots(self):
+        result = json.loads(evaluate(f'''let
+          kernels = {{
+            linux-cachyos-latest-x86_64-v3 = {{ marker = "latest"; }};
+            linux-cachyos-bore-x86_64-v3 = {{ marker = "bore"; }};
+          }};
+          pkgs = {{
+            stdenv.hostPlatform.system = "x86_64-linux";
+            linuxPackagesFor = kernel: {{ inherit kernel; }};
+          }};
+          sets = import {ROOT}/lib/cachyos/package-sets.nix {{ inherit pkgs kernels; }};
+        in {{
+          names = builtins.attrNames sets;
+          bore = sets.linuxPackages-cachyos-bore-x86_64-v3.kernel.marker;
+          latest = sets.linuxPackages-cachyos-latest-x86_64-v3.kernel.marker;
+          unsupported = builtins.attrNames (import {ROOT}/lib/cachyos/package-sets.nix {{
+            inherit kernels;
+            pkgs.stdenv.hostPlatform.system = "aarch64-linux";
+          }});
+        }}''').stdout)
+        self.assertEqual(result["bore"], "bore")
+        self.assertEqual(result["latest"], "latest")
+        self.assertEqual(result["names"], ["linuxPackages-cachyos-bore-x86_64-v3", "linuxPackages-cachyos-latest-x86_64-v3"])
+        self.assertEqual(result["unsupported"], [])
+
     def test_nur_overlay_and_registry_export_the_same_packages(self):
         data = json.loads(evaluate(f'''let
           pkgs = {{ callPackage = path: args: {{ }}; lib = {{ }}; }};
