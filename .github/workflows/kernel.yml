@@ -16,6 +16,12 @@ on:
       - 'lib/cachyos/**'
       - 'scripts/check-kernel-closure.py'
       - '.github/workflows/kernel.yml'
+  # Daily path: after a successful scheduled or manual update run on main, check the
+  # kernel again (realise or build) and push to both caches, even without a new pin.
+  workflow_run:
+    workflows: ['Update packages']
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       force:
@@ -53,7 +59,13 @@ jobs:
     # Stays disabled until the cachix-builder runner exists. Set the repository
     # variable KERNEL_BUILDER_ENABLED to 'true' only then; otherwise the job would
     # wait in the queue forever.
-    if: github.ref == 'refs/heads/main' && vars.KERNEL_BUILDER_ENABLED == 'true'
+    # workflow_run is trusted only for successful scheduled/manual runs of this repository.
+    if: >-
+      github.ref == 'refs/heads/main' && vars.KERNEL_BUILDER_ENABLED == 'true' &&
+      (github.event_name != 'workflow_run' || (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_repository.full_name == github.repository &&
+        (github.event.workflow_run.event == 'schedule' || github.event.workflow_run.event == 'workflow_dispatch')))
     runs-on: [self-hosted, nixos, cachix-builder]
     # First build is from scratch on 8 threads (estimate: ~1 h, 6-10 GB peak RAM).
     # 12 h leaves room for a slow first run without cutting the build off.
@@ -195,7 +207,7 @@ jobs:
         if: >-
           always() && steps.closure.outcome == 'success' &&
           github.ref == 'refs/heads/main' &&
-          (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+          (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_run')
         env:
           CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
         run: |
@@ -218,7 +230,7 @@ jobs:
         if: >-
           always() && steps.closure.outcome == 'success' &&
           github.ref == 'refs/heads/main' &&
-          (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+          (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_run')
         env:
           ATTIC_TOKEN: ${{ secrets.ATTIC_TOKEN }}
         run: bash scripts/attic-push.sh "$RUNNER_TEMP/kernel-outputs"

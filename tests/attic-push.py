@@ -129,6 +129,10 @@ class AtticIndependenceTests(unittest.TestCase):
         self.assertIn("always()", cachix)
         self.assertIn("always()", attic)
         self.assertIn("--max-jobs 0", body)
+        # Daily coverage: the kernel must also run after every scheduled update run.
+        self.assertIn("workflows: ['Update packages']", body)
+        self.assertIn("github.event.workflow_run.conclusion == 'success'", body)
+        self.assertIn("github.event_name == 'workflow_run'", body)
         self.assertIn("id: realise", body)
 
 
