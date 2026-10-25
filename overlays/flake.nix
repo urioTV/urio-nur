@@ -6,7 +6,7 @@
   pkgs,
 }:
 let
-  packageNames = import ../lib/package-names.nix { packageDirectory = ../pkgs; };
+  packageNames = import ../pkgs/registry.nix { packageDirectory = ../pkgs; };
   packages = builtins.listToAttrs (
     map (name: {
       inherit name;

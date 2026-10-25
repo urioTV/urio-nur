@@ -2,7 +2,7 @@
 # No per-package list in the NUR entry point, flake, overlay or CI is needed.
 { pkgs }:
 let
-  names = import ../lib/package-names.nix { packageDirectory = ./.; };
+  names = import ./registry.nix { packageDirectory = ./.; };
 in
 assert builtins.all (
   name:

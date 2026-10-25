@@ -8,7 +8,7 @@
 }:
 let
   inherit (pkgs) lib;
-  packageNames = import ../lib/package-names.nix { packageDirectory = ../pkgs; };
+  packageNames = import ../pkgs/registry.nix { packageDirectory = ../pkgs; };
   consumer = pkgs.extend (
     _: prev: {
       bc = prev.bc.overrideAttrs (old: {
