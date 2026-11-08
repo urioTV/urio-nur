@@ -9,6 +9,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "pkgs/meitou-client/update.sh"
+LAUNCHER_SCRIPT = ROOT / "pkgs/meitou-launcher/update.sh"
 
 
 class MeitouUpdaterTests(unittest.TestCase):
@@ -38,10 +39,10 @@ class MeitouUpdaterTests(unittest.TestCase):
         p.write_text("#!/usr/bin/env bash\nset -euo pipefail\n" + body + "\n")
         p.chmod(0o755)
 
-    def run_updater(self, version):
+    def run_updater(self, version, script=SCRIPT):
         env = {**os.environ, "PATH": f"{self.bin}:{os.environ['PATH']}", "FIXTURE": str(self.fixture),
                "CURRENT": version, "CALLS": str(self.log), "STUBDIR": str(self.bin)}
-        return subprocess.run(["bash", str(SCRIPT)], cwd=self.root, env=env, text=True, capture_output=True)
+        return subprocess.run(["bash", str(script)], cwd=self.root, env=env, text=True, capture_output=True)
 
     def test_picks_newest_stable_game_and_regenerates_deps(self):
         result = self.run_updater("0.16.0")
@@ -57,6 +58,20 @@ class MeitouUpdaterTests(unittest.TestCase):
                 result = self.run_updater(version)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertFalse(self.log.exists())
+
+    def test_launcher_selects_launcher_release_and_refreshes_deps(self):
+        result = self.run_updater("1.9.0", LAUNCHER_SCRIPT)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.log.read_text().splitlines(), [
+            "nix-update --flake meitou-launcher --version 9.0.0",
+            "fetch-deps pkgs/meitou-launcher/deps.json",
+        ])
+
+    def test_launcher_ignores_game_releases(self):
+        self.fixture.write_text(json.dumps([{"tag_name": "v99.0.0", "draft": False, "prerelease": False}]))
+        result = self.run_updater("1.9.0", LAUNCHER_SCRIPT)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(self.log.exists())
 
     def test_missing_stable_game_release_fails_closed(self):
         self.fixture.write_text(json.dumps([{"tag_name": "launcher-v9.0.0", "draft": False, "prerelease": False}]))
