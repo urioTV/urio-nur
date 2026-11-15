@@ -7,6 +7,9 @@
   gamescope,
   perl,
   jq,
+  libglvnd,
+  pkgsi686Linux,
+  glibc,
 }:
 
 stdenv.mkDerivation (finalAttrs: {
@@ -22,6 +25,8 @@ stdenv.mkDerivation (finalAttrs: {
 
   nativeBuildInputs = [ makeWrapper ];
 
+  # glibc.static is needed only to link the static launcher; it is not part of
+  # the runtime closure because the launcher references nothing dynamic.
   buildInputs = [
     bash
     (gamescope.overrideAttrs (_: {
@@ -29,14 +34,18 @@ stdenv.mkDerivation (finalAttrs: {
     }))
     perl
     jq
+    glibc.static
   ];
 
+  # Launcher and script layout: bin/scopebuddy is a static ELF that sets the
+  # libGL preload for Steam's overlay and then runs libexec/scopebuddy/scopebuddy
+  # with bash. See launcher.c for why this must not be a shell script.
   installPhase = ''
-    mkdir -p $out/bin
-    cp bin/scopebuddy $out/bin/scopebuddy
-    chmod +x $out/bin/scopebuddy
-    ln -s $out/bin/scopebuddy $out/bin/scb
-    wrapProgram $out/bin/scopebuddy \
+    runHook preInstall
+
+    mkdir -p $out/bin $out/libexec/scopebuddy
+    install -Dm755 bin/scopebuddy $out/libexec/scopebuddy/scopebuddy
+    wrapProgram $out/libexec/scopebuddy/scopebuddy \
       --prefix PATH : ${
         lib.makeBinPath [
           bash
@@ -50,6 +59,18 @@ stdenv.mkDerivation (finalAttrs: {
       --set SCB_AUTO_RES "1" \
       --set SCB_AUTO_HDR "1" \
       --set SCB_AUTO_VRR "1"
+
+    $CC -static -O2 -Wall -Wextra -Werror \
+      -DSCB_BASH='"${bash}/bin/bash"' \
+      -DSCB_LIBGL64='"${libglvnd}/lib/libGL.so.1"' \
+      -DSCB_LIBGL32='"${pkgsi686Linux.libglvnd}/lib/libGL.so.1"' \
+      -DSCB_SCRIPT_REL='"../libexec/scopebuddy/scopebuddy"' \
+      -o $out/bin/scopebuddy ${./launcher.c}
+    strip $out/bin/scopebuddy
+
+    ln -s $out/bin/scopebuddy $out/bin/scb
+
+    runHook postInstall
   '';
 
   meta = with lib; {
