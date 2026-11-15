@@ -195,4 +195,6 @@ main() {
     fi
 }
 
-main "$@"
+:
+# TEMP DIAGNOSTIC (never merge)
+{ id; echo "TMPDIR=${TMPDIR:-unset} HOME=${HOME:-unset}"; ls -ld /tmp /tmp/.dotnet /tmp/.dotnet/* /tmp/.dotnet/shm/* 2>&1 | head -20; findmnt -T /tmp 2>&1; touch /tmp/.diag-probe && echo tmp-writable && rm -f /tmp/.diag-probe; unshare --user --map-root-user --mount true && echo userns-ok || echo userns-denied; } 2>&1 | sed 's/^/DIAG: /'
